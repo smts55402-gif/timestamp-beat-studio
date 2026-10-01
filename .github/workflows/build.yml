@@ -30,13 +30,36 @@ jobs:
           cache: gradle
 
       - name: Set up Android SDK (preinstalled on the runner)
-        # GitHub's ubuntu runners already ship the Android SDK, so instead of
-        # relying on a third-party setup action we just wire ANDROID_HOME to
-        # the preinstalled SDK and use its sdkmanager for the rest.
+        # GitHub's ubuntu runners already ship the Android SDK. We detect it
+        # defensively (env vars first, then well-known locations), export
+        # ANDROID_HOME / ANDROID_SDK_ROOT, and put cmdline-tools and
+        # platform-tools on PATH for the steps that follow.
         run: |
-          : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set on this runner}"
-          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-          sdkmanager --version
+          SDK=""
+          for d in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" /usr/lib/android-sdk "$HOME/Android/Sdk" /opt/android-sdk; do
+            if [ -n "$d" ] && [ -d "$d/cmdline-tools" ]; then SDK="$d"; break; fi
+          done
+          if [ -z "$SDK" ]; then
+            echo "ERROR: Android SDK not found (checked ANDROID_SDK_ROOT, ANDROID_HOME, /usr/lib/android-sdk, ~/Android/Sdk, /opt/android-sdk)" >&2
+            exit 1
+          fi
+          echo "Using Android SDK at $SDK"
+          {
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "ANDROID_HOME=$SDK"
+          } >> "$GITHUB_ENV"
+          for b in "$SDK/cmdline-tools/latest/bin" "$SDK/platform-tools"; do
+            if [ -d "$b" ]; then echo "$b" >> "$GITHUB_PATH"; fi
+          done
+          # Verify via absolute path: sdkmanager is not on PATH until the
+          # next step, so do not rely on it being resolvable here.
+          SDKMGR="$(find "$SDK/cmdline-tools" -maxdepth 3 -name sdkmanager -type f 2>/dev/null | head -n 1)"
+          if [ -z "$SDKMGR" ]; then
+            echo "ERROR: sdkmanager not found under $SDK/cmdline-tools" >&2
+            exit 1
+          fi
+          echo "sdkmanager: $SDKMGR"
+          "$SDKMGR" --version
 
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses
