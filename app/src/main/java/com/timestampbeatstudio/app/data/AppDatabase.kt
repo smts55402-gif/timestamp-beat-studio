@@ -58,10 +58,10 @@ interface ProjectDao {
     @Query("SELECT * FROM projects WHERE id = :id")
     suspend fun getById(id: Long): ProjectEntity?
 
-    @Query("SELECT * FROM projects ORDER BY createdAt DESC")
+    @Query("SELECT * FROM projects ORDER BY createdAt DESC, id DESC")
     fun observeRecent(): Flow<List<ProjectEntity>>
 
-    @Query("SELECT * FROM projects ORDER BY createdAt DESC")
+    @Query("SELECT * FROM projects ORDER BY createdAt DESC, id DESC")
     suspend fun listRecent(): List<ProjectEntity>
 }
 
@@ -79,7 +79,7 @@ interface ExportDao {
     @Insert
     suspend fun insert(export: ExportEntity): Long
 
-    @Query("SELECT * FROM exports WHERE projectId = :projectId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM exports WHERE projectId = :projectId ORDER BY createdAt DESC, id DESC")
     suspend fun forProject(projectId: Long): List<ExportEntity>
 }
 

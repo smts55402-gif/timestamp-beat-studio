@@ -38,7 +38,11 @@ private class FakeProjectDao : ProjectDao {
     override suspend fun listRecent(): List<ProjectEntity> = flow.value
 
     private fun emit() {
-        flow.value = store.values.sortedByDescending { it.createdAt }
+        // Mirrors the real DAO ordering (createdAt DESC, id DESC) so the
+        // newest project is first even when two rows share a millisecond.
+        flow.value = store.values.sortedWith(
+            compareByDescending<ProjectEntity> { it.createdAt }.thenByDescending { it.id }
+        )
     }
 }
 
