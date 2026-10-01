@@ -1,0 +1,31 @@
+# Gradle wrapper jar is restored from gradle-wrapper.jar.b64 (see README).
+gradle/wrapper/gradle-wrapper.jar
+
+# Gradle / Android / Kotlin
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+
+# Android Studio
+.idea/
+*.jks
+*.keystore
+
+# Native build outputs
+.whispersrc/
+.cxx/
+
+# Python server
+server/.venv/
+server/__pycache__/
+server/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets — never commit
+*.env
+secrets.properties

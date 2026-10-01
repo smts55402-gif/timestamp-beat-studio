@@ -1,0 +1,11 @@
+name: timestamp-beat-studio-server
+
+services:
+  transcriber:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      # MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-524288000}
+    restart: unless-stopped
