@@ -29,11 +29,14 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        id: setup-android
-        uses: android-actions/setup-android@v3
-        # android-actions/setup-android exports ANDROID_HOME (and ANDROID_SDK_ROOT)
-        # into the environment for all subsequent steps — no hardcoded path.
+      - name: Set up Android SDK (preinstalled on the runner)
+        # GitHub's ubuntu runners already ship the Android SDK, so instead of
+        # relying on a third-party setup action we just wire ANDROID_HOME to
+        # the preinstalled SDK and use its sdkmanager for the rest.
+        run: |
+          : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set on this runner}"
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          sdkmanager --version
 
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses
