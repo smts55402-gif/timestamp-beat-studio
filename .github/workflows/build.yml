@@ -18,9 +18,11 @@ jobs:
         # The binary wrapper jar cannot be committed through the tooling used
         # for the initial push, so it is stored base64-encoded and restored here
         # before any wrapper validation or Gradle invocation.
+        # chmod +x: the execute bit is not preserved by that tooling either.
         run: |
           base64 -d gradle/wrapper/gradle-wrapper.jar.b64 > gradle/wrapper/gradle-wrapper.jar
           test -s gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
 
       - name: Set up JDK 17 (Temurin, Gradle cache enabled)
         uses: actions/setup-java@v4
