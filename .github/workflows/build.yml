@@ -1,0 +1,70 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Gradle wrapper jar
+        # The binary wrapper jar cannot be committed through the tooling used
+        # for the initial push, so it is stored base64-encoded and restored here
+        # before any wrapper validation or Gradle invocation.
+        run: |
+          base64 -d gradle/wrapper/gradle-wrapper.jar.b64 > gradle/wrapper/gradle-wrapper.jar
+          test -s gradle/wrapper/gradle-wrapper.jar
+
+      - name: Set up JDK 17 (Temurin, Gradle cache enabled)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        id: setup-android
+        uses: android-actions/setup-android@v3
+        # android-actions/setup-android exports ANDROID_HOME (and ANDROID_SDK_ROOT)
+        # into the environment for all subsequent steps — no hardcoded path.
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264" "cmake;3.22.1"
+
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@v2
+
+      - name: Run :core unit tests
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Run :app debug unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Assemble debug APK (builds :whisper native code too)
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Verify debug APK exists
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK" || { echo "ERROR: APK not found at $APK"; exit 1; }
+          echo "APK found:"
+          ls -lh "$APK"
+          echo "APK size: $(du -h "$APK" | cut -f1)"
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timestamp-beat-studio-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
