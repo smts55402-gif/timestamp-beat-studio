@@ -1,12 +1,17 @@
 package com.timestampbeatstudio.whisper
 
 import com.timestampbeatstudio.core.PcmAudio
+import com.timestampbeatstudio.core.ProgressSmoothing
 import com.timestampbeatstudio.core.TranscriptionEngine
 import com.timestampbeatstudio.core.TranscriptionException
 import com.timestampbeatstudio.core.TranscriptionResult
 import com.timestampbeatstudio.core.Word
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -94,19 +99,55 @@ class WhisperEngine(
             )
         }
 
-        val nativeWords: Array<NativeWord> = mutex.withLock {
-            if (closed) throw TranscriptionException("WhisperEngine is closed")
-            ensureInit()
-            if (isCancelled()) throw CancellationException("transcription cancelled before start")
-            progress(0f)
-            // Native per-segment progress only covers the decode tail; map it
-            // into 0.05..1.0 so the bar keeps moving monotonically.
-            val callback = ProgressCallback { p ->
-                progress((0.05f + 0.95f * p).coerceIn(0f, 1f))
-                isCancelled() // true => native aborts after this segment
+        // Monotonic, thread-safe progress reporter. The native callback only
+        // fires per segment AFTER the blocking whisper_full returns, so during
+        // the long transcription the UI would freeze. A smooth time-based
+        // estimate (ProgressSmoothing) keeps the bar moving instead; real
+        // native signals always win via max().
+        val progressLock = Any()
+        var lastReported = 0f
+        fun report(p: Float) {
+            val v = p.coerceIn(0f, 1f)
+            val emit = synchronized(progressLock) {
+                if (v > lastReported) {
+                    lastReported = v
+                    v
+                } else {
+                    null
+                }
             }
-            withContext(Dispatchers.Default) {
-                native.nativeTranscribe(ctxPtr, pcm.samples, numThreads, callback)
+            if (emit != null) progress(emit)
+        }
+
+        val nativeWords: Array<NativeWord> = coroutineScope {
+            val estimateSec =
+                ProgressSmoothing.estimateTotalSec(durationSec.coerceAtLeast(1.0))
+            val ticker = launch(Dispatchers.Default) {
+                val startNs = System.nanoTime()
+                while (isActive) {
+                    delay(500)
+                    val elapsedSec = (System.nanoTime() - startNs) / 1e9
+                    report(ProgressSmoothing.estimate(elapsedSec, estimateSec))
+                }
+            }
+            try {
+                mutex.withLock {
+                    if (closed) throw TranscriptionException("WhisperEngine is closed")
+                    ensureInit()
+                    if (isCancelled()) throw CancellationException("transcription cancelled before start")
+                    report(0f)
+                    // Native per-segment progress fires only after the blocking
+                    // whisper_full returns; map it into 0.05..1.0 and merge.
+                    val callback = ProgressCallback { p ->
+                        report(0.05f + 0.95f * p)
+                        isCancelled() // true => native aborts after this segment
+                    }
+                    withContext(Dispatchers.Default) {
+                        native.nativeTranscribe(ctxPtr, pcm.samples, numThreads, callback)
+                    }
+                }
+            } finally {
+                ticker.cancel()
             }
         }
 

@@ -10,14 +10,24 @@ local.properties
 
 # Android Studio
 .idea/
+
+# Keystores: release keys must NEVER be committed. The fixed DEBUG keystore
+# below is the standard public android/android credential, committed
+# deliberately so all CI builds share one signature (seamless updates).
 *.jks
 *.keystore
+!debug.keystore
 
 # Native build outputs
 .whispersrc/
 .cxx/
 
-# Python server
+# E2E artifacts: words.json is derived from the user's private narration audio;
+# keep it local unless the user explicitly wants it in the repo (the
+# RealAudioE2ETest skips gracefully when it is absent).
+e2e/words.json
+e2e/out/
+e2e/*.log
 server/.venv/
 server/__pycache__/
 server/*.pyc

@@ -9,12 +9,24 @@ android {
     namespace = "com.timestampbeatstudio.app"
     compileSdk = 34
 
+    // Fixed debug keystore (repo root) so every CI build shares one signature
+    // and installs as an update over the previous build. Debug-only credentials
+    // (android/android) — never use for release builds.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.timestampbeatstudio.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildFeatures {
